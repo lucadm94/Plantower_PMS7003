@@ -75,6 +75,17 @@ class Plantower_PMS7003 {
     uint8_t getHWVersion();
     uint8_t getErrorCode();
 
+    // Standby mode. For low power consumption and prolong the life of the sensor.
+    void sleep();
+    // Operating mode. Stable data should be got at least 30 seconds after the sensor wakeup from the sleep mode because of the fan's performance.
+    void wakeUp();
+    // Active mode. Default mode after power up. In this mode sensor would send serial data to the host automatically.
+    void activeMode();
+    // Passive mode. In this mode sensor would send serial data to the host only for request.
+    void passiveMode();
+    // Request read in Passive Mode.
+    void requestRead();
+
   private:
     PMS7003_DATABUF sensorData;
     bool dataReady;
@@ -83,11 +94,15 @@ class Plantower_PMS7003 {
     unsigned char lastByte,
                   nextByte;
     int bufferIndex;
+    bool _mode; 
+#define MODE_ACTIVE 0
+#define MODE_PASSIVE 1
 
-    void dumpBytes();
     void convertSensorData();
     bool isValidChecksum();
     uint16_t uint16FromBufferData(unsigned char *buff, int loc);
 };
 
 #endif /*_Plantower_PMS7003_H_*/
+
+

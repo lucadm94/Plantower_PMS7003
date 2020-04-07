@@ -10,17 +10,12 @@ BSD license. See license.txt for details.
 **********************************************************************/
 
 #include "Plantower_PMS7003.h"
+#include "../../../tools/log/can5_log.h"
 
 Plantower_PMS7003::Plantower_PMS7003() {
   dataReady = false;
   initialized = false;
   debug = false;
-}
-
-
-void Plantower_PMS7003::init() {
-  Serial1.begin(9600);
-  init(&Serial1);  
 }
 
 void Plantower_PMS7003::init(Stream *s) {
@@ -34,7 +29,7 @@ void Plantower_PMS7003::init(Stream *s) {
 
 void Plantower_PMS7003::updateFrame() {
   if (!initialized) {
-    Serial.println("Error: must call Plantower_PMS7003::init()");
+    DDEBUGLN("Error: must call Plantower_PMS7003::init()");
     return;
   }
   dataReady = false;
@@ -52,24 +47,19 @@ void Plantower_PMS7003::updateFrame() {
 
   if (bufferIndex == PMS7003_DATA_SIZE) {
     if (sensorData.bytes[0] == 0x42 && sensorData.bytes[1] == 0x4d) {
-      if (debug) {
-        dumpBytes();
-      }
+      
       convertSensorData();
-      if (debug) {
-        dumpBytes();
-      }
       
       if(isValidChecksum()) {
         dataReady = true;
       } else {
         if (debug) {
-          Serial.println("Invalid data checksum");
+          DDEBUGLN("Invalid data checksum");
         }
       }
     } else {
       if (debug) {
-        Serial.println("Malformed first byte");
+        DDEBUGLN("Malformed first byte");
       }
     }
     bufferIndex=0;
@@ -127,17 +117,6 @@ uint8_t Plantower_PMS7003::getErrorCode() {
   return sensorData.values.error_code;
 }
 
-
-
-
-void Plantower_PMS7003::dumpBytes() {
-  for(int i=0; i<PMS7003_DATA_SIZE; i++) {
-    Serial.print(sensorData.bytes[i]);
-    Serial.print(" ");
-  }
-  Serial.println();
-}
-
 // fix sensor data endianness
 void Plantower_PMS7003::convertSensorData() {
   int loc=0;
@@ -176,4 +155,46 @@ uint16_t Plantower_PMS7003::uint16FromBufferData(unsigned char *buff, int loc) {
     return -1;
   }
   return ((buff[loc]<<8) + buff[loc+1]);
+}
+
+
+
+// Standby mode. For low power consumption and prolong the life of the sensor.
+void Plantower_PMS7003::sleep()
+{
+  uint8_t command[] = { 0x42, 0x4D, 0xE4, 0x00, 0x00, 0x01, 0x73 };
+  serial->write(command, sizeof(command));
+}
+
+// Operating mode. Stable data should be got at least 30 seconds after the sensor wakeup from the sleep mode because of the fan's performance.
+void Plantower_PMS7003::wakeUp()
+{
+  uint8_t command[] = { 0x42, 0x4D, 0xE4, 0x00, 0x01, 0x01, 0x74 };
+  serial->write(command, sizeof(command));
+}
+
+// Active mode. Default mode after power up. In this mode sensor would send serial data to the host automatically.
+void Plantower_PMS7003::activeMode()
+{
+  uint8_t command[] = { 0x42, 0x4D, 0xE1, 0x00, 0x01, 0x01, 0x71 };
+  serial->write(command, sizeof(command));
+  _mode = MODE_ACTIVE;
+}
+
+// Passive mode. In this mode sensor would send serial data to the host only for request.
+void Plantower_PMS7003::passiveMode()
+{
+  uint8_t command[] = { 0x42, 0x4D, 0xE1, 0x00, 0x00, 0x01, 0x70 };
+  serial->write(command, sizeof(command));
+  _mode = MODE_PASSIVE;
+}
+
+// Request read in Passive Mode.
+void Plantower_PMS7003::requestRead()
+{
+  if (_mode == MODE_PASSIVE)
+  {
+    uint8_t command[] = { 0x42, 0x4D, 0xE2, 0x00, 0x00, 0x01, 0x71 };
+    serial->write(command, sizeof(command));
+  }
 }
